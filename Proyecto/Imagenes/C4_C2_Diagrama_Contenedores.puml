@@ -1,0 +1,48 @@
+@startuml
+title C4–C2 (Simplificado, sin includes) — PQRS Lakehouse PoC
+
+skinparam shadowing false
+skinparam rectangle {
+  RoundCorner 12
+}
+skinparam ArrowThickness 1
+skinparam defaultFontName Arial
+
+' Actores
+actor "Analista/Operación" as Analyst
+actor "Profesor/Admin" as Admin
+actor "Equipo Estudiantes" as Students
+
+' Contenedores
+rectangle "Generadores de eventos PQRS\n(Python Job)\n- Simula llegada diaria multifuente\n- Produce RAW (JSONL/CSV)" as GEN
+
+rectangle "Scheduler\n(Cron/Task Runner)\n- Orquesta generación diaria\n- Ejecuta runs/backfills" as SCHED
+
+rectangle "Data Lake\n(MinIO - S3 compatible)\n- raw/\n- bronze/ (Parquet)\n- silver/ (Parquet)\n- Particiones: source= , day=" as LAKE
+
+rectangle "Pipeline ETL/Analytics\n(Python + opcional Dask)\n- raw → bronze (Parquet)\n- bronze → silver (curado)\n- carga Postgres: silver_*, gold_*\n- registra meta_* y calidad" as ETL
+
+database "Warehouse / Serving\n(Postgres - Supabase)\n- meta_* (etl_runs, data_quality)\n- silver_* (curado)\n- gold_* (KPIs/agregados)" as DB
+
+rectangle "Dashboards (opcional)\n(Grafana / Metabase / Streamlit)\n- Consume gold_* y meta_*" as DASH
+
+rectangle "Exploración (opcional)\n(Jupyter)\n- Consultas ad-hoc\n- Validación" as NB
+
+' Relaciones
+SCHED --> GEN : programa generación diaria
+SCHED --> ETL : programa runs / backfills
+
+GEN --> LAKE : escribe RAW\n(JSONL/CSV)
+ETL --> LAKE : lee RAW/BRONZE\nescribe BRONZE/SILVER (Parquet)
+ETL --> DB : carga SILVER/GOLD\n+ META (SQL)
+
+DASH --> DB : consulta KPIs/observabilidad
+NB --> DB : consultas exploratorias
+NB --> LAKE : lectura Parquet (si aplica)
+
+Analyst --> DASH : analiza indicadores (UI)
+Admin --> ETL : ejecuta / audita (CLI)
+Students --> GEN : ajusta simulación (CLI/config)
+Students --> ETL : desarrolla y ejecuta pipeline
+
+@enduml

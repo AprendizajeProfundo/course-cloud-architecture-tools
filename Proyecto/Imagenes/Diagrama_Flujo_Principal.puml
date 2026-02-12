@@ -1,0 +1,44 @@
+@startuml
+title Flujo principal end-to-end — PQRS Lakehouse PoC
+
+skinparam shadowing false
+skinparam defaultFontName Arial
+skinparam ArrowThickness 1
+skinparam rectangle {
+  RoundCorner 12
+}
+
+rectangle "Generadores\n(Python Job)\nSimulan llegada diaria" as GEN
+
+rectangle "MinIO\nS3 Object Storage\nraw/" as RAW
+rectangle "MinIO\nS3 Object Storage\nbronze/ (Parquet)" as BRONZE
+rectangle "MinIO\nS3 Object Storage\nsilver/ (Parquet)" as SILVER
+
+rectangle "ETL / Analytics Pipeline\n(Python + Dask + Spark)\nraw→bronze→silver\n+ load Postgres" as ETL
+
+database "Postgres (Supabase)\n- silver_*\n- gold_*\n- meta.* (etl_runs, data_quality)" as PG
+
+rectangle "Dashboards / Consultas\n(Grafana/Metabase/Streamlit/SQL)" as DASH
+
+' Flujo de datos
+GEN --> RAW : escribe eventos\n(JSONL/CSV)
+ETL --> RAW : lee raw
+ETL --> BRONZE : escribe Parquet
+ETL --> BRONZE : lee bronze
+ETL --> SILVER : escribe Parquet
+ETL --> PG : carga silver_* y gold_*\n(SQL/COPY)
+
+' Consumo
+DASH --> PG : consume gold_*\n(y algunas silver_*)
+
+' Metadatos / trazabilidad
+ETL --> PG : registra trazabilidad\n(meta.*)\n(run_id, tiempos, conteos,\nchecks de calidad)
+
+note right of PG
+meta.* habilita:
+- auditoría
+- reproducibilidad
+- reconstrucción de runs
+end note
+
+@enduml

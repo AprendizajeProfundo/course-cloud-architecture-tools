@@ -1,0 +1,101 @@
+@startuml
+title C4-ish (Contexto) — Motores de almacenamiento (Storage Engines)
+
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam wrapWidth 220
+skinparam maxMessageSize 220
+skinparam defaultTextAlignment left
+
+' --- Actores ---
+actor "Usuario/Cliente\n(App/Web/API Consumer)" as user
+actor "Desarrollador\n(Modelado + consultas)" as dev
+actor "Operaciones/SRE\n(operación, SLO, incidentes)" as sre
+
+' --- Sistema principal ---
+rectangle "Sistema: Aplicación\n(Data-Intensive App)" as app {
+  rectangle "Capa de Dominio\n(Entidades / Agregados)" as domain
+  rectangle "Capa de Acceso a Datos\n(DAO/Repositorios/ORM)" as dal
+  rectangle "Capa de Consulta\n(queries, rangos,\nAPIs de lectura/escritura)" as query
+  rectangle "Observabilidad\n(métricas, logs, trazas,\nSLO/SLA)" as obs
+}
+
+' --- Boundary de Almacenamiento ---
+rectangle "Boundary: Capa de Almacenamiento\n(Storage Engine)" as store {
+
+  rectangle "Write Path\n(Ingesta / escritura)" as wpath
+  rectangle "Read Path\n(Lectura / búsqueda)" as rpath
+  rectangle "Índices\n(hash / B-tree / LSM)\n+ estructuras auxiliares" as index
+
+  rectangle "WAL / Log\n(durabilidad + recuperación)" as wal
+  rectangle "Compaction / Maintenance\n(merge, limpieza,\nreorganización)" as comp
+  rectangle "File Layout\n(páginas, SSTables,\nsegmentos, columnas)" as layout
+  rectangle "Buffer / Cache\n(memoria, page cache)" as buf
+}
+
+' --- Persistencia física ---
+rectangle "Medio persistente\n(SSD/HDD/NVMe)\n+ FS" as disk
+
+' --- Relaciones de uso ---
+user --> app : Usa funcionalidades\n(lecturas/escrituras)
+dev --> domain : Define modelo y agregados
+dev --> query : Diseña consultas\n(punto/rango/agregaciones)
+dev --> dal : Define mapeo\n(objetos ↔ registros)
+
+sre --> obs : Monitorea latencias,\ncolas, errores
+app --> obs : Emite métricas/logs/trazas
+
+' --- Aplicación hacia almacenamiento ---
+domain --> dal : Persistencia/lectura
+query --> dal : Ejecuta operaciones\npor clave / por rango
+
+dal --> wpath : Writes\n(insert/update/delete)
+dal --> rpath : Reads\n(get/scan/range)
+
+' --- Internals del motor ---
+wpath --> wal : Append-first\n(WAL o log-structured)
+wpath --> index : Mantiene/actualiza\níndices y metadatos
+wpath --> buf : Escribe a memoria\n(buffer/memtable/page cache)
+
+rpath --> index : Localiza datos\n(clave/rango)
+rpath --> buf : Sirve desde memoria\nsi hay hit
+rpath --> layout : Accede a archivos\n(páginas/SSTables/segmentos)
+
+comp --> layout : Reescritura/merge\n(compaction, vacuum)
+comp --> index : Recalcula/optimiza\nestructuras auxiliares
+comp --> wal : Puede truncar/rotar\nsegún checkpoints
+
+wal --> disk : Persistencia secuencial
+layout --> disk : Persistencia\n(lecturas/escrituras)
+buf --> layout : Flush\n(memtable→SSTable / page dirty→disk)
+
+' --- Notas de trade-offs ---
+note right of store
+Decisiones de motor típicas:
+- Log-structured / LSM:
+  * escrituras secuenciales + compaction
+  * lecturas potencialmente variables (multi-SSTable)
+- B-tree:
+  * lecturas/rangos predecibles
+  * escrituras con actualizaciones in-place
+- Columnar:
+  * optimiza analítica (OLAP) y compresión
+  * penaliza OLTP intensivo
+end note
+
+note bottom of index
+Índices:
+- Hash: clave exacta, no rangos
+- B-tree/B+: clave + rangos
+- LSM: memtable + SSTables + filtros Bloom
+Costo: más escritura/espacio para menos latencia de lectura
+end note
+
+note bottom of wal
+Durabilidad y recuperación:
+- WAL asegura persistencia antes de confirmar
+- Checkpoints limitan tiempo de replay
+- Recovery = replay WAL + reconstrucción de estado
+end note
+
+@enduml

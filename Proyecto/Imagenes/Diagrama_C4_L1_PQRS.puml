@@ -1,0 +1,28 @@
+@startuml
+' C4-PlantUML: System Context (C4-L1)
+' Basado estrictamente en el documento "Proyecto Curso – Herramientas de Computación en la Nube" (Caso PQRS Lakehouse PoC)
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+LAYOUT_WITH_LEGEND()
+
+title C4-L1 — Contexto: Plataforma Analítica PQRS (PoC)
+
+Person(analista, "Analista/Agente", "Consulta KPIs, backlog y cumplimiento de SLA.")
+Person(admin, "Admin del Sistema", "Opera el stack local (Docker), ejecuta pipelines, valida evidencia y trazabilidad.")
+
+System(pqrs_analitico, "Sistema PQRS Analítico (PoC)", "Plataforma analítica tipo Lakehouse para ingesta multifuente, trazabilidad y analítica operativa/SLAs.")
+
+System_Ext(canal_email, "Canal Email (simulado)", "Genera eventos PQRS desde correo.")
+System_Ext(canal_web, "Canal Webform (simulado)", "Genera eventos PQRS desde formulario web.")
+System_Ext(canal_chat, "Canal Chat/Mensajería (simulado)", "Genera eventos PQRS desde mensajería instantánea.")
+System_Ext(canal_call, "Canal Call/Transcripción (simulado)", "Genera eventos PQRS desde llamadas transcritas.")
+
+Rel(analista, pqrs_analitico, "Consulta analítica", "Dashboards/SQL")
+Rel(admin, pqrs_analitico, "Opera y ejecuta", "CLI/Docker")
+
+Rel(canal_email, pqrs_analitico, "Envía eventos PQRS", "JSONL/CSV")
+Rel(canal_web, pqrs_analitico, "Envía eventos PQRS", "JSONL/CSV")
+Rel(canal_chat, pqrs_analitico, "Envía eventos PQRS", "JSONL/CSV")
+Rel(canal_call, pqrs_analitico, "Envía eventos PQRS", "JSONL/CSV")
+
+@enduml

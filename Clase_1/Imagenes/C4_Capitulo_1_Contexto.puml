@@ -1,0 +1,66 @@
+@startuml
+title DDIA Cap. 1 — C4-ish (Contexto) para una Aplicación Data-Intensive
+
+' C4-ish: usamos estereotipos y límites (Boundaries) sin depender de librerías externas.
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam wrapWidth 220
+skinparam maxMessageSize 220
+skinparam defaultTextAlignment left
+
+' ---- Personas / Actores ----
+actor "Usuario final\n(Client App / Browser / Mobile)" as user
+actor "Operaciones / SRE\n(Operación y monitoreo)" as sre
+actor "Equipo de Desarrollo\n(Arquitectura y evolución)" as dev
+
+' ---- Sistema principal ----
+rectangle "Sistema: Aplicación Data-Intensive\n(Servicio / Producto)" as system {
+
+  rectangle "API / Servicio" as api
+
+  rectangle "Sistema de Datos Compuesto\n(Data System)" as ds {
+
+    rectangle "OLTP Database\n(almacenamiento transaccional)" as db
+    rectangle "Cache\n(acelera lecturas)\n+ invalidación/actualización" as cache
+    rectangle "Search Index\n(búsqueda por texto/filtros)" as search
+    rectangle "Message Queue / Stream\n(async / eventos)" as mq
+    rectangle "Batch / Analytics\n(procesamiento offline)" as batch
+  }
+
+  rectangle "Observabilidad\n(métricas, logs, trazas,\nalertas, SLO/SLA)" as obs
+}
+
+' ---- Relaciones de uso ----
+user --> api : Solicita/consume funcionalidades\n(latencia y disponibilidad percibidas)
+api --> db : Lecturas/Escrituras
+api --> cache : Read-through / Write-through\n(invalidación/actualización)
+api --> search : Indexación + consultas de búsqueda
+api --> mq : Publica eventos / mensajes\n(procesamiento asíncrono)
+mq --> batch : Alimenta pipelines / jobs
+batch --> db : Deriva/actualiza datasets (opcional)
+batch --> search : Reindexación (opcional)
+
+' ---- Confiabilidad / Robustez (conceptual) ----
+api --> obs : Emite métricas/logs/trazas\npara detectar fallas y degradación
+ds --> obs : Señales internas, tasas de error,\nlatencias, colas, saturación
+
+' ---- Operación y cambio ----
+sre --> obs : Monitorea SLO, alertas,\nrespuesta a incidentes
+sre --> system : Despliegues, configuración,\nrecuperación, capacity planning
+dev --> system : Evolución del diseño,\nrefactoring, cambios de arquitectura
+dev --> ds : Selección de herramientas y trade-offs\n(consistencia, rendimiento, costo)
+
+' ---- Notas C4-ish: objetivos transversales ----
+note right of system
+Objetivos transversales del Cap. 1:
+- Confiabilidad: correcto bajo fallas (HW/SW/humano)
+- Escalabilidad: describir carga + medir performance (percentiles)
+- Mantenibilidad: operabilidad, simplicidad, evolvabilidad
+end note
+
+note bottom of obs
+Performance: medir percentiles (p50/p95/p99) y tail latency.
+SLO/SLA basados en percentiles, no en promedios.
+end note
+
+@enduml

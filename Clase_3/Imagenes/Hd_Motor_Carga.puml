@@ -1,0 +1,88 @@
+@startuml
+' C4-PlantUML: Hardware → Storage Engine → Workload (concept map as C4 containers)
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_LEFT_RIGHT()
+title Hardware → Motor de almacenamiento → Patrón de carga (C4-PlantUML)
+
+' --- Boundary: Infrastructure / Hardware
+System_Boundary(b_hw, "Infraestructura / Hardware") {
+  Container(hdd,  "HDD",  "Disco magnético", "Secuencial fuerte, aleatorio caro (seek)")
+  Container(ssd,  "SSD",  "Flash",          "Aleatorio mejor; importa write amplification / desgaste")
+  Container(nvme, "NVMe", "SSD sobre PCIe", "Baja latencia + alto paralelismo (colas)")
+  Container(ram,  "RAM / Buffer Pool", "Memoria", "Cache de páginas; afecta p95/p99")
+}
+
+' --- Boundary: Storage Engines
+System_Boundary(b_eng, "Motores de almacenamiento") {
+  Container(btree,    "B-Tree / B+Tree", "Index + Page Store", "Rangos y lecturas predecibles; writes con I/O más aleatorio")
+  Container(lsm,      "LSM Tree",        "Memtable + SSTables", "Writes secuenciales; compaction; reads con posible amplificación")
+  Container(hashidx,  "Hash Index",      "Key-Value",           "Equality lookups; no rangos")
+  Container(columnar, "Columnar Engine", "Column Store",        "Agregaciones masivas; compresión; OLAP")
+  Container(wal,      "WAL",             "Write-Ahead Log",     "Durabilidad + recuperación; replay; base de replicación")
+}
+
+' --- Boundary: Workloads
+System_Boundary(b_wl, "Patrones de carga") {
+  Container(oltp,      "OLTP",      "Transaccional", "Lecturas/escrituras pequeñas, concurrencia alta, latencia baja")
+  Container(olap,      "OLAP",      "Analítico",     "Escaneo + agregaciones; throughput > latencia")
+  Container(writeheavy,"Write-heavy", "Ingesta/Logs", "Escrituras intensivas; secuencial preferido")
+  Container(readheavy, "Read-heavy",  "Serving/Lookup", "Lecturas intensivas; cache + índices")
+}
+
+' --- Boundary: Implementaciones reales
+System_Boundary(b_impl, "Tecnologías (ejemplos reales)") {
+  Container(pg,     "PostgreSQL",      "B-Tree + WAL",           "OLTP general; rangos; MVCC")
+  Container(mysql,  "MySQL InnoDB",    "B+Tree + WAL/redo",      "OLTP clásico")
+  Container(rocks,  "RocksDB",         "LSM",                    "Write-heavy; embedded KV")
+  Container(cass,   "Apache Cassandra","LSM-like (SSTables)",    "Distribuido; write-heavy")
+  Container(scylla, "ScyllaDB",        "LSM-like",               "Distribuido; alto throughput")
+  Container(ch,     "ClickHouse",      "Columnar",               "OLAP; compresión + agregación")
+  Container(duck,   "DuckDB",          "Columnar",               "OLAP local; analítica embebida")
+  Container(redis,  "Redis",           "In-memory KV / Hash",    "Cache; sesiones; baja latencia")
+}
+
+' --- Core relationships: Hardware → Engines
+Rel(hdd,  btree,    "Favorece rangos (secuencial) y page store", "I/O secuencial > aleatorio")
+Rel(ssd,  lsm,      "Mejora writes; tolera compaction",          "Aleatorio menos costoso")
+Rel(nvme, lsm,      "Maximiza ingestión + compaction paralela",  "Baja latencia")
+Rel(ssd,  columnar, "Escaneo + compresión eficientes",           "Throughput alto")
+Rel(ram,  wal,      "Buffering + group commit",                  "Reduce latencia")
+Rel(ram,  btree,    "Buffer pool de páginas",                    "Reduce reads físicos")
+Rel(ram,  lsm,      "Memtable en RAM",                           "Absorbe escrituras")
+
+' --- Engines → Workloads
+Rel(btree, oltp,      "Buen desempeño en OLTP", "Rangos + transacciones")
+Rel(lsm,   writeheavy,"Óptimo para escrituras intensivas", "Writes secuenciales")
+Rel(lsm,   oltp,      "OLTP en algunos sistemas", "Con trade-offs de lectura/compaction")
+Rel(columnar, olap,   "Óptimo para analítica", "Column scan + compresión")
+Rel(hashidx, readheavy,"Muy rápido por clave exacta", "No rangos")
+
+' --- WAL as cross-cutting durability
+Rel(wal, btree, "Durabilidad/recuperación", "WAL/redo")
+Rel(wal, lsm,   "Durabilidad/replicación",  "Log-based")
+Rel(wal, columnar, "Durabilidad (según sistema)", "Logs/parts")
+
+' --- Engines → Implementations
+Rel(pg,    btree,    "Implementa", "")
+Rel(pg,    wal,      "Implementa", "")
+Rel(mysql, btree,    "Implementa", "")
+Rel(rocks, lsm,      "Implementa", "")
+Rel(cass,  lsm,      "Implementa", "")
+Rel(scylla,lsm,      "Implementa", "")
+Rel(ch,    columnar, "Implementa", "")
+Rel(duck,  columnar, "Implementa", "")
+Rel(redis, hashidx,  "Implementa", "")
+
+' --- Implementation → Workloads (examples)
+Rel(pg,    oltp,      "Usado típicamente para", "")
+Rel(mysql, oltp,      "Usado típicamente para", "")
+Rel(rocks, writeheavy,"Usado típicamente para", "")
+Rel(cass,  writeheavy,"Usado típicamente para", "")
+Rel(scylla,writeheavy,"Usado típicamente para", "")
+Rel(ch,    olap,      "Usado típicamente para", "")
+Rel(duck,  olap,      "Usado típicamente para", "")
+Rel(redis, readheavy, "Usado típicamente para", "")
+
+SHOW_LEGEND()
+@enduml

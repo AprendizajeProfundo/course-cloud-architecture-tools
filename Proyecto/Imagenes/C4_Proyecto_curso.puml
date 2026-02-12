@@ -1,0 +1,63 @@
+@startuml
+' =========================================================
+' C4-PlantUML (Simplificado) — PQRS Lakehouse PoC (Local-first)
+' Requiere C4-PlantUML: https://github.com/plantuml-stdlib/C4-PlantUML
+' =========================================================
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+' -----------------------------
+' C4 - Nivel 1: Contexto
+' -----------------------------
+LAYOUT_WITH_LEGEND()
+
+title C4-L1 Contexto — Plataforma Analítica PQRS (PoC)
+
+Person(analyst, "Analista/Agente", "Consulta KPIs, backlog y cumplimiento de SLA.")
+Person(admin, "Admin del Sistema", "Opera el stack local (Docker), ejecuta pipelines, valida evidencia.")
+
+System_Boundary(poc, "Plataforma Analítica PQRS (PoC)") {
+  System(pqrs, "Sistema PQRS Analítico", "PoC lakehouse para ingesta multifuente, trazabilidad y analítica operativa.")
+}
+
+System_Ext(email, "Canal Email (simulado)", "Genera eventos PQRS desde correo.")
+System_Ext(webform, "Canal Webform (simulado)", "Genera eventos PQRS desde formulario web.")
+System_Ext(chat, "Canal Chat (simulado)", "Genera eventos PQRS desde mensajería.")
+System_Ext(call, "Canal Call/Transcripción (simulado)", "Genera eventos PQRS desde llamadas transcritas.")
+
+Rel(email, pqrs, "Envía eventos PQRS", "JSONL/CSV")
+Rel(webform, pqrs, "Envía eventos PQRS", "JSONL/CSV")
+Rel(chat, pqrs, "Envía eventos PQRS", "JSONL/CSV")
+Rel(call, pqrs, "Envía eventos PQRS", "JSONL/CSV")
+
+Rel(analyst, pqrs, "Consulta analítica", "Dashboards/SQL")
+Rel(admin, pqrs, "Opera y ejecuta", "CLI/Docker")
+
+newpage
+
+' -----------------------------
+' C4 - Nivel 2: Contenedores
+' -----------------------------
+title C4-L2 Contenedores — PQRS Lakehouse PoC (MinIO + Supabase + Pipelines)
+
+System_Boundary(poc2, "Plataforma Analítica PQRS (PoC)") {
+
+  Container(gen, "Generadores de Eventos", "Python Job/Service", "Simula llegada diaria multifuente. Produce raw eventos.")
+  Container(minio, "Data Lake", "MinIO (S3-compatible)", "Almacena RAW/BRONZE/SILVER. Soporta particionamiento Hive-style. Parquet en bronze/silver.")
+  Container(etl, "Pipeline ETL/Analytics", "Python (Pandas/Polars/Dask)", "Transforma raw→bronze Parquet, bronze→silver, carga Postgres (silver/gold), registra meta y calidad.")
+  ContainerDb(pg, "Warehouse/Serving", "Supabase Postgres", "Esquemas meta.*, silver_*, gold_* para consulta y dashboards.")
+  Container(dash, "Capa Analítica/Dashboard", "Grafana/Metabase/Streamlit (opcional)", "Consume principalmente gold_* para KPIs y visualización.")
+}
+
+Rel(gen, minio, "Escribe RAW", "S3 API (JSONL/CSV)")
+
+Rel(etl, minio, "Lee RAW/BRONZE y escribe BRONZE/SILVER", "S3 API (Parquet)")
+Rel(etl, pg, "Carga SILVER y GOLD + registra META", "SQL")
+Rel(dash, pg, "Consulta KPIs y cubos", "SQL/HTTP")
+
+Rel(admin, gen, "Configura/ejecuta", "CLI")
+Rel(admin, etl, "Ejecuta runs / backfills", "CLI")
+Rel(analyst, dash, "Explora indicadores", "UI")
+Rel(analyst, pg, "Consultas ad-hoc (opcional)", "SQL")
+
+@enduml

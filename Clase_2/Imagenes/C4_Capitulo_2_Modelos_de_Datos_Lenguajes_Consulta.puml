@@ -1,0 +1,98 @@
+```puml
+@startuml
+title C4-ish (Contexto) — Modelos de datos y lenguajes de consulta
+
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam wrapWidth 220
+skinparam maxMessageSize 220
+skinparam defaultTextAlignment left
+
+' --- Actores ---
+actor "Usuario/Cliente\n(Web/Mobile/API Consumer)" as user
+actor "Desarrollador\n(Modelado y consultas)" as dev
+actor "Operaciones/SRE\n(Disponibilidad y desempeño)" as sre
+actor "Sistemas Externos\n(Integraciones)" as ext
+
+' --- Sistema principal ---
+rectangle "Sistema: Aplicación\n(Data-Intensive App)" as app {
+  rectangle "Capa de Dominio\n(Agregados / Entidades)" as domain
+  rectangle "Capa de Acceso a Datos\n(Repositorios/DAO/ORM)\n+ Mapeo de modelos" as dal
+  rectangle "Capa de Consulta\n(Consultas declarativas/imperativas\n+ APIs de consulta)" as query
+  rectangle "Observabilidad\n(métricas, logs, trazas,\nSLO/SLA)" as obs
+}
+
+' --- Boundary de persistencia poliglota ---
+rectangle "Boundary: Persistencia Políglota\n(Elección por patrón de acceso)" as poly {
+
+  rectangle "Relational DB\n(SQL)\n- Tablas/joins\n- Normalización\n- Consultas declarativas" as rdb
+
+  rectangle "Document Store\n(JSON/BSON/XML)\n- Agregados autocontenidos\n- Anidamiento\n- Referencias opcionales" as doc
+
+  rectangle "Graph DB\n- Nodos/aristas\n- Patrones de relación\n- Traversals" as graph
+
+  rectangle "Batch/Distributed Processing\n(MapReduce / pipelines)\n- Transformación masiva\n- Derivación de datasets" as batch
+}
+
+' --- Lenguajes de consulta (conceptuales) ---
+rectangle "Boundary: Lenguajes de Consulta" as langs {
+  rectangle "Declarativos\n(SQL / Cypher / SPARQL / Datalog)\nQué se quiere, no cómo" as decl
+  rectangle "Imperativos\n(loops, llamadas API, map/filter)\nCómo se ejecuta" as impl
+}
+
+' --- Relaciones principales ---
+user --> app : Usa funcionalidades\n(consultas/actualizaciones)
+ext --> app : Envía/recibe datos\n(integración)
+
+dev --> domain : Modela el dominio\n(entidades/agregados)
+dev --> dal : Define mapeo\n(objeto↔relación/documento/grafo)
+dev --> query : Diseña consultas\n(DSL/APIs, criterios, filtros)
+
+sre --> obs : Monitorea rendimiento\n(latencias, colas, errores)
+
+app --> obs : Emite señales\n(métricas, logs, trazas)
+
+domain --> dal : Persistencia/lectura\n(según modelo elegido)
+query --> dal : Ejecuta consultas\n(planificación/optimización)
+
+dal --> rdb : CRUD + joins\nSQL (declarativo)
+dal --> doc : CRUD por agregado\n(anidado/referencias)
+dal --> graph : Traversals / patrones\n(relaciones densas)
+dal --> batch : Jobs de procesamiento\n(derivación/ETL)
+
+' --- Lenguajes a motores ---
+query --> decl : Preferido para\noptimización y paralelización
+query --> impl : Útil para\ncontrol fino y casos específicos
+
+decl --> rdb : SQL
+decl --> graph : Cypher
+decl --> graph : SPARQL (triplestore)\n/ consultas semánticas
+decl --> doc : Agregaciones/DSL\n(según motor)
+decl --> batch : DSLs declarativas\n(sobre pipelines)
+
+impl --> doc : Lógica de aplicación\n(resolución de referencias)
+impl --> rdb : Iteraciones + ORMs\n(impedance mismatch)
+impl --> graph : Traversals programáticos\nsi no hay DSL suficiente
+
+' --- Notas clave (contexto) ---
+note right of poly
+Selección del modelo por:
+- Forma de los datos (agregados vs relaciones densas)
+- Patrón de acceso (por documento/por join/por traversal)
+- Evolución de esquema (validación en escritura vs lectura)
+- Consultas dominantes (ad hoc, texto, relaciones, inferencia)
+end note
+
+note bottom of langs
+Declarativo:
+- separa intención del plan de ejecución
+- permite optimización automática
+- favorece paralelización
+
+Imperativo:
+- describe el procedimiento
+- suele trasladar optimización y consistencia a la aplicación
+end note
+
+@enduml
+```
